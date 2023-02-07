@@ -88,29 +88,33 @@ fn main() -> Result<()> {
         if let Node::Root(Root { children, .. }) = a {
             if let Some(Node::Toml(Toml { value, .. })) = children.first() {
                 let fm: FrontMatter = toml::from_str(value).unwrap();
-                let path = Path::new("posts").join(fm.slug);
-                let path = config.output_path(&cwd, &path);
+                let path = config.output_path(&cwd, &fm.slug);
 
                 log::info!("{:?} -> {:?}", post.path(), path);
                 fs::create_dir_all(path.parent().unwrap()).map_err(Error::IoError)?;
                 let file = File::create(&path).unwrap();
-                let mut file = BufWriter::new(file);
-                file.write_all(md.as_bytes()).unwrap();
+                let file = BufWriter::new(file);
+                reg.render_to_write(fm.template.as_str(), &PostData { body: md }, file)
+                    .unwrap();
             } else {
                 panic!("no front matter");
             }
         } else {
             unreachable!();
         }
-
-        log::info!("{:?}", md);
     }
 
     Ok(())
+}
+
+#[derive(serde::Serialize)]
+struct PostData {
+    body: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
 struct FrontMatter {
     slug: String,
     created: Datetime,
+    template: String,
 }
