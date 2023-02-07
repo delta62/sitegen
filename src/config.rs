@@ -7,6 +7,7 @@ use serde::Deserialize;
 pub struct Config {
     out_dir: String,
     page_dir: String,
+    partials_dir: String,
     post_dir: String,
     static_dir: String,
 }
@@ -25,6 +26,11 @@ impl Config {
 
     pub fn post_path<P: AsRef<Path>>(&self, cwd: P) -> PathBuf {
         let path = self.post_dir.as_str();
+        cwd.as_ref().join(path)
+    }
+
+    pub fn partials_path<P: AsRef<Path>>(&self, cwd: P) -> PathBuf {
+        let path = self.partials_dir.as_str();
         cwd.as_ref().join(path)
     }
 

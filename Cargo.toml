@@ -9,6 +9,7 @@ edition = "2021"
 clap = { version = "4.1.4", features = ["derive"] }
 env_logger = "0.10.0"
 grass = "0.12.2"
+handlebars = "4.3.6"
 log = "0.4.17"
 markdown = "0.3.0"
 serde = { version = "1.0.152", features = ["derive"] }
