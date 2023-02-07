@@ -6,11 +6,12 @@ edition = "2021"
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
+chrono = { version = "0.4.23", features = ["serde"] }
 clap = { version = "4.1.4", features = ["derive"] }
 env_logger = "0.10.0"
 grass = "0.12.2"
 handlebars = "4.3.6"
 log = "0.4.17"
-markdown = "0.3.0"
+markdown = "1.0.0-alpha.6"
 serde = { version = "1.0.152", features = ["derive"] }
 toml = "0.7.1"

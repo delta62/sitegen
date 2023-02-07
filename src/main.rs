@@ -10,6 +10,9 @@ use crate::config::Config;
 use crate::error::{Error, Result};
 use clap::Parser;
 use handlebars::Handlebars;
+use markdown::mdast::{Node, Root, Toml};
+use markdown::{Constructs, Options, ParseOptions};
+use toml::value::Datetime;
 
 fn main() -> Result<()> {
     env_logger::init();
@@ -19,7 +22,7 @@ fn main() -> Result<()> {
     let cfg_path = cwd.join("config.toml");
     let config = Config::load(cfg_path).expect("Unable to read config file");
     let mut reg = Handlebars::new();
-    log::debug!("{:?}", config);
+    log::info!("{:?}", config);
 
     let partials_path = config.partials_path(&cwd);
     let partials = fs::read_dir(&partials_path).map_err(Error::IoError)?;
@@ -52,5 +55,51 @@ fn main() -> Result<()> {
             .unwrap();
     }
 
+    let constructs = Constructs {
+        frontmatter: true,
+        ..Default::default()
+    };
+
+    let opts = Options {
+        parse: ParseOptions {
+            constructs: constructs.clone(),
+            ..Default::default()
+        },
+        ..Default::default()
+    };
+
+    let post_path = config.post_path(&cwd);
+    let posts = fs::read_dir(&post_path).map_err(Error::IoError)?;
+    for post in posts {
+        let post = post.map_err(Error::IoError)?;
+        log::info!("{:?}", post.path());
+        let content = fs::read_to_string(&post.path()).map_err(Error::IoError)?;
+        let md = markdown::to_html_with_options(content.as_str(), &opts).unwrap();
+
+        let a = markdown::to_mdast(
+            content.as_str(),
+            &ParseOptions {
+                constructs: constructs.clone(),
+                ..Default::default()
+            },
+        )
+        .unwrap();
+
+        if let Node::Root(Root { children, .. }) = a {
+            if let Some(Node::Toml(Toml { value, .. })) = children.first() {
+                let fm: FrontMatter = toml::from_str(value).unwrap();
+                println!("{:?}", fm);
+            }
+        }
+
+        log::info!("{:?}", md);
+    }
+
     Ok(())
+}
+
+#[derive(Debug, serde::Deserialize)]
+struct FrontMatter {
+    slug: String,
+    created: Datetime,
 }
