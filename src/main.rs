@@ -3,7 +3,8 @@ mod config;
 mod error;
 
 use std::fs::{self, File};
-use std::io::BufWriter;
+use std::io::{BufWriter, Write};
+use std::path::Path;
 
 use crate::args::Args;
 use crate::config::Config;
@@ -72,7 +73,6 @@ fn main() -> Result<()> {
     let posts = fs::read_dir(&post_path).map_err(Error::IoError)?;
     for post in posts {
         let post = post.map_err(Error::IoError)?;
-        log::info!("{:?}", post.path());
         let content = fs::read_to_string(&post.path()).map_err(Error::IoError)?;
         let md = markdown::to_html_with_options(content.as_str(), &opts).unwrap();
 
@@ -88,8 +88,19 @@ fn main() -> Result<()> {
         if let Node::Root(Root { children, .. }) = a {
             if let Some(Node::Toml(Toml { value, .. })) = children.first() {
                 let fm: FrontMatter = toml::from_str(value).unwrap();
-                println!("{:?}", fm);
+                let path = Path::new("posts").join(fm.slug);
+                let path = config.output_path(&cwd, &path);
+
+                log::info!("{:?} -> {:?}", post.path(), path);
+                fs::create_dir_all(path.parent().unwrap()).map_err(Error::IoError)?;
+                let file = File::create(&path).unwrap();
+                let mut file = BufWriter::new(file);
+                file.write_all(md.as_bytes()).unwrap();
+            } else {
+                panic!("no front matter");
             }
+        } else {
+            unreachable!();
         }
 
         log::info!("{:?}", md);
