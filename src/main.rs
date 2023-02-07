@@ -3,8 +3,7 @@ mod config;
 mod error;
 
 use std::fs::{self, File};
-use std::io::{BufWriter, Write};
-use std::path::Path;
+use std::io::BufWriter;
 
 use crate::args::Args;
 use crate::config::Config;
@@ -94,8 +93,15 @@ fn main() -> Result<()> {
                 fs::create_dir_all(path.parent().unwrap()).map_err(Error::IoError)?;
                 let file = File::create(&path).unwrap();
                 let file = BufWriter::new(file);
-                reg.render_to_write(fm.template.as_str(), &PostData { body: md }, file)
-                    .unwrap();
+                reg.render_to_write(
+                    fm.template.as_str(),
+                    &PostData {
+                        body: md,
+                        title: fm.title,
+                    },
+                    file,
+                )
+                .unwrap();
             } else {
                 panic!("no front matter");
             }
@@ -110,11 +116,13 @@ fn main() -> Result<()> {
 #[derive(serde::Serialize)]
 struct PostData {
     body: String,
+    title: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
 struct FrontMatter {
     slug: String,
+    title: String,
     created: Datetime,
     template: String,
 }
