@@ -3,7 +3,8 @@ mod config;
 mod error;
 
 use std::fs::{self, File};
-use std::io::BufWriter;
+use std::io::{BufWriter, Write};
+use std::path::Path;
 
 use crate::args::Args;
 use crate::config::Config;
@@ -55,6 +56,24 @@ fn main() -> Result<()> {
             .unwrap();
     }
 
+    let css_path = config.static_path(&cwd);
+    let stylesheets = fs::read_dir(&css_path).unwrap();
+    for stylesheet in stylesheets {
+        let stylesheet = stylesheet.unwrap();
+        let path = stylesheet.path();
+        let path = path.as_path().strip_prefix(&css_path).unwrap();
+        let path = Path::new(config.static_dir.as_str()).join(path);
+        let mut path = config.output_path(&cwd, path);
+        path.set_extension("css");
+
+        let rendered = grass::from_path(stylesheet.path(), &Default::default()).unwrap();
+        log::info!("rendered SCSS {:?}", path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        let file = File::create(&path).unwrap();
+        let mut file = BufWriter::new(file);
+        file.write_all(rendered.as_bytes()).unwrap();
+    }
+
     let constructs = Constructs {
         frontmatter: true,
         ..Default::default()
@@ -98,6 +117,7 @@ fn main() -> Result<()> {
                     &PostData {
                         body: md,
                         title: fm.title,
+                        static_dir: config.static_dir.as_str(),
                     },
                     file,
                 )
@@ -114,8 +134,10 @@ fn main() -> Result<()> {
 }
 
 #[derive(serde::Serialize)]
-struct PostData {
+struct PostData<'a> {
     body: String,
+    #[serde(rename = "static")]
+    static_dir: &'a str,
     title: String,
 }
 
