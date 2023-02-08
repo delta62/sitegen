@@ -7,7 +7,6 @@ use std::path::Path;
 pub struct CompilerOptions<'a> {
     pub input_pattern: &'a str,
     pub output_path: &'a str,
-    pub context: &'a str,
 }
 
 pub struct SassCompiler;
