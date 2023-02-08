@@ -1,7 +1,16 @@
-use clap::Parser;
+use clap::{Parser, ValueEnum};
+
+#[derive(Copy, Clone, Debug, Eq, PartialEq, ValueEnum)]
+pub enum Command {
+    /// Build the site
+    Build,
+    /// Remove previously built artifacts
+    Clean,
+}
 
 #[derive(Debug, Parser)]
+#[command(author, version, about, long_about = None)]
 pub struct Args {
-    #[clap(short, long)]
-    cwd: Option<String>,
+    #[arg(value_enum)]
+    pub command: Command,
 }
