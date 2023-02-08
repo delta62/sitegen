@@ -21,5 +21,6 @@ fn main() -> Result<()> {
     match args.command {
         Command::Build => cmd::build(&args, &config),
         Command::Clean => cmd::clean(&args, &config),
+        Command::Serve => cmd::serve(&args, &config),
     }
 }

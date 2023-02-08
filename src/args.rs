@@ -6,6 +6,8 @@ pub enum Command {
     Build,
     /// Remove previously built artifacts
     Clean,
+    /// Start a development server and host the site locally
+    Serve,
 }
 
 #[derive(Debug, Parser)]
