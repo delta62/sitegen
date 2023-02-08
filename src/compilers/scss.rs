@@ -1,6 +1,6 @@
 use crate::error::{Error, Result};
 use glob::glob;
-use std::fs::{self, File};
+use std::fs::File;
 use std::io::{BufWriter, Write};
 use std::path::Path;
 
@@ -21,9 +21,9 @@ impl SassCompiler {
             let rendered = grass::from_path(stylesheet.as_path(), &compiler_opts)
                 .map_err(|e| Error::CompilerError(Box::new(e)))?;
 
-            let mut path = Path::new(opts.output_path).join(stylesheet.as_path());
+            let file_name = stylesheet.file_name().unwrap();
+            let mut path = Path::new(opts.output_path).join(file_name);
             path.set_extension("css");
-            fs::create_dir_all(path.parent().unwrap()).map_err(Error::IoError)?;
 
             let file = File::create(&path).map_err(Error::IoError)?;
             let mut file = BufWriter::new(file);

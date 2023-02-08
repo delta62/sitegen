@@ -8,10 +8,8 @@ use std::io::BufWriter;
 use std::path::Path;
 
 #[derive(serde::Serialize)]
-struct PostData<'a> {
+struct PostData {
     body: String,
-    #[serde(rename = "static")]
-    static_dir: &'a str,
     title: String,
 }
 
@@ -57,7 +55,9 @@ impl MarkdownCompiler {
             let content = fs::read_to_string(post.as_path()).map_err(Error::IoError)?;
             let md = markdown::to_html_with_options(content.as_str(), &self.options).unwrap();
             let fm = self.parse_front_matter(content.as_str());
-            let path = output_path.as_ref().join(&fm.slug);
+
+            let mut path = output_path.as_ref().join(&fm.slug);
+            path.set_extension("html");
 
             log::info!("{:?} -> {:?}", post, path);
             fs::create_dir_all(path.parent().unwrap()).map_err(Error::IoError)?;
@@ -70,7 +70,6 @@ impl MarkdownCompiler {
                 &PostData {
                     body: md,
                     title: fm.title,
-                    static_dir: "static",
                 },
                 file,
             )

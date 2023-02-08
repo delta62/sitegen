@@ -16,6 +16,8 @@ pub fn clean(_args: &Args, config: &Config) -> Result<()> {
 }
 
 pub fn build(_args: &Args, config: &Config) -> Result<()> {
+    fs::create_dir_all(config.out_dir.as_str()).map_err(Error::IoError)?;
+
     let sass_opts = CompilerOptions {
         input_pattern: config.style_pattern.as_str(),
         output_path: config.out_dir.as_str(),
@@ -35,6 +37,7 @@ pub fn build(_args: &Args, config: &Config) -> Result<()> {
 }
 
 pub fn serve(args: &Args, config: &Config) -> Result<()> {
+    clean(args, config)?;
     build(args, config)?;
 
     let server = Server::http("localhost:8080").unwrap();
@@ -48,7 +51,7 @@ pub fn serve(args: &Args, config: &Config) -> Result<()> {
 
         let file = fs::metadata(path.as_path()).and_then(|metadata| {
             if metadata.is_dir() {
-                let index = Path::new(path.as_path()).join("pages/index.html");
+                let index = Path::new(path.as_path()).join("index.html");
                 extension = index.extension().map(|e| e.to_string_lossy().to_string());
                 File::open(&index)
             } else {

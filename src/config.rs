@@ -9,7 +9,6 @@ pub struct Config {
     pub page_pattern: String,
     pub partials_pattern: String,
     pub post_pattern: String,
-    pub static_dir: String,
     pub style_pattern: String,
 }
 

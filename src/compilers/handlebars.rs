@@ -36,12 +36,12 @@ impl<'a> HandlebarsCompiler<'a> {
 
         for page in pages {
             let page = page.map_err(Error::GlobError)?;
-            let mut path = output_path.as_ref().join(page.as_path());
+            let file_name = page.file_name().unwrap();
+            let mut path = output_path.as_ref().join(file_name);
             path.set_extension("html");
 
             log::info!("render {:?} -> {:?}", page, path);
 
-            fs::create_dir_all(path.parent().unwrap()).map_err(Error::IoError)?;
             let contents = fs::read_to_string(page).map_err(Error::IoError)?;
             let file = File::create(&path).unwrap();
             let file = BufWriter::new(file);
