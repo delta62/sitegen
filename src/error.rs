@@ -1,9 +1,14 @@
 use std::{fmt::Display, io};
 
+use glob::{GlobError, PatternError};
+
 #[derive(Debug)]
 pub enum Error {
+    CompilerError(Box<dyn std::error::Error>),
     DeserializeError(toml::de::Error),
+    GlobError(GlobError),
     IoError(io::Error),
+    PatternError(PatternError),
 }
 
 impl Display for Error {

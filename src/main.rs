@@ -1,18 +1,20 @@
 mod args;
+mod compilers;
 mod config;
 mod error;
 
 use std::fs::{self, File};
-use std::io::{BufWriter, Write};
-use std::path::Path;
+use std::io::BufWriter;
 
 use crate::args::Args;
+use crate::compilers::{CompilerOptions, SassCompiler};
 use crate::config::Config;
 use crate::error::{Error, Result};
 use clap::Parser;
 use handlebars::Handlebars;
 use markdown::mdast::{Node, Root, Toml};
 use markdown::{Constructs, Options, ParseOptions};
+
 use toml::value::Datetime;
 
 fn main() -> Result<()> {
@@ -56,23 +58,13 @@ fn main() -> Result<()> {
             .unwrap();
     }
 
-    let css_path = config.static_path(&cwd);
-    let stylesheets = fs::read_dir(&css_path).unwrap();
-    for stylesheet in stylesheets {
-        let stylesheet = stylesheet.unwrap();
-        let path = stylesheet.path();
-        let path = path.as_path().strip_prefix(&css_path).unwrap();
-        let path = Path::new(config.static_dir.as_str()).join(path);
-        let mut path = config.output_path(&cwd, path);
-        path.set_extension("css");
-
-        let rendered = grass::from_path(stylesheet.path(), &Default::default()).unwrap();
-        log::info!("rendered SCSS {:?}", path);
-        fs::create_dir_all(path.parent().unwrap()).unwrap();
-        let file = File::create(&path).unwrap();
-        let mut file = BufWriter::new(file);
-        file.write_all(rendered.as_bytes()).unwrap();
-    }
+    let output = config.output_path(&cwd, "");
+    let opts = CompilerOptions {
+        input_pattern: config.style_pattern.as_str(),
+        output_path: output.as_path().to_str().unwrap(),
+        context: cwd.as_path().to_str().unwrap(),
+    };
+    SassCompiler::compile(&opts).unwrap();
 
     let constructs = Constructs {
         frontmatter: true,

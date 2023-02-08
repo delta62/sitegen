@@ -1,5 +1,5 @@
 [package]
-name = "blog"
+name = "sitegen"
 version = "0.1.0"
 edition = "2021"
 
@@ -7,6 +7,7 @@ edition = "2021"
 chrono = { version = "0.4.23", features = ["serde"] }
 clap = { version = "4.1.4", features = ["derive"] }
 env_logger = "0.10.0"
+glob = "0.3.1"
 grass = "0.12.2"
 handlebars = "4.3.6"
 log = "0.4.17"

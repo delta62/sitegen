@@ -10,6 +10,7 @@ pub struct Config {
     partials_dir: String,
     post_dir: String,
     pub static_dir: String,
+    pub style_pattern: String,
 }
 
 impl Config {
@@ -31,11 +32,6 @@ impl Config {
 
     pub fn partials_path<P: AsRef<Path>>(&self, cwd: P) -> PathBuf {
         let path = self.partials_dir.as_str();
-        cwd.as_ref().join(path)
-    }
-
-    pub fn static_path<P: AsRef<Path>>(&self, cwd: P) -> PathBuf {
-        let path = self.static_dir.as_str();
         cwd.as_ref().join(path)
     }
 
