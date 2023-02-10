@@ -1,5 +1,6 @@
 use crate::compilers::HandlebarsCompiler;
 use crate::error::{Error, Result};
+use chrono::{DateTime, Utc};
 use glob::glob;
 use markdown::mdast::{Node, Root, Toml};
 use markdown::{Constructs, Options, ParseOptions};
@@ -11,6 +12,7 @@ use std::path::Path;
 struct PostData {
     body: String,
     title: String,
+    is_published: bool,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -18,6 +20,7 @@ struct FrontMatter {
     slug: String,
     title: String,
     template: String,
+    published: Option<DateTime<Utc>>,
 }
 
 pub struct MarkdownCompiler {
@@ -70,6 +73,7 @@ impl MarkdownCompiler {
                 &PostData {
                     body: md,
                     title: fm.title,
+                    is_published: fm.published.is_some(),
                 },
                 file,
             )

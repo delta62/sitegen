@@ -1,8 +1,4 @@
-use std::fs::{self, File};
-use std::path::Path;
-use std::str::FromStr;
-
-use tiny_http::{Header, Response, Server};
+use std::fs;
 
 use crate::compilers::{CompilerOptions, HandlebarsCompiler, MarkdownCompiler, SassCompiler};
 use crate::config::Config;
@@ -10,78 +6,84 @@ use crate::{
     args::Args,
     error::{Error, Result},
 };
+use notify::{recommended_watcher, Event, EventKind, Watcher};
+use std::path::Path;
+use tokio::process::Command;
 
 pub fn clean(_args: &Args, config: &Config) -> Result<()> {
-    std::fs::remove_dir_all(config.out_dir.as_str()).map_err(Error::IoError)
+    std::fs::remove_dir_all(config.build.out_dir.as_str()).map_err(Error::IoError)
 }
 
 pub fn build(_args: &Args, config: &Config) -> Result<()> {
-    fs::create_dir_all(config.out_dir.as_str()).map_err(Error::IoError)?;
+    fs::create_dir_all(config.build.out_dir.as_str()).map_err(Error::IoError)?;
 
     let sass_opts = CompilerOptions {
-        input_pattern: config.style_pattern.as_str(),
-        output_path: config.out_dir.as_str(),
+        input_pattern: config.build.style_pattern.as_str(),
+        output_path: config.build.out_dir.as_str(),
     };
     SassCompiler::compile(&sass_opts).unwrap();
 
     let mut handlebars = HandlebarsCompiler::new();
-    handlebars.add_partials(config.partials_pattern.as_str())?;
-    handlebars.compile_all(config.page_pattern.as_str(), config.out_dir.as_str())?;
+    handlebars.add_partials(config.build.partials_pattern.as_str())?;
+    handlebars.compile_all(
+        config.build.page_pattern.as_str(),
+        config.build.out_dir.as_str(),
+    )?;
 
     let markdown = MarkdownCompiler::new();
     markdown.compile(
-        config.post_pattern.as_str(),
-        config.out_dir.as_str(),
+        config.build.post_pattern.as_str(),
+        config.build.out_dir.as_str(),
         &handlebars,
     )
 }
 
-pub fn serve(args: &Args, config: &Config) -> Result<()> {
-    clean(args, config)?;
-    build(args, config)?;
+pub async fn serve(args: Args, config: Config) -> Result<()> {
+    clean(&args, &config)?;
+    build(&args, &config)?;
 
-    let server = Server::http("localhost:8080").unwrap();
+    let local_config = config.clone();
+    let command = local_config.http.command.as_str();
+    let http_server_args = local_config
+        .http
+        .args
+        .as_ref()
+        .map(|v| v.as_slice())
+        .unwrap_or_default();
 
-    for request in server.incoming_requests() {
-        log::info!("{} {}", request.method(), request.url());
-
-        let path = &request.url()[1..];
-        let path = Path::new(config.out_dir.as_str()).join(path);
-        let mut extension = path.extension().map(|e| e.to_string_lossy().to_string());
-
-        let file = fs::metadata(path.as_path()).and_then(|metadata| {
-            if metadata.is_dir() {
-                let index = Path::new(path.as_path()).join("index.html");
-                extension = index.extension().map(|e| e.to_string_lossy().to_string());
-                File::open(&index)
-            } else {
-                File::open(&path)
-            }
-        });
-
-        match file {
-            Ok(file) => {
-                let content_type = if let Some(e) = extension {
-                    match e.as_str() {
-                        "html" => "text/html",
-                        "css" => "text/css",
-                        _ => "text/plain",
-                    }
-                } else {
-                    "text/html"
-                };
-                let content_type =
-                    Header::from_str(format!("Content-Type: {}", content_type).as_str()).unwrap();
-                let res = Response::from_file(file).with_header(content_type);
-                request.respond(res).unwrap();
-            }
-            Err(e) => {
-                log::error!("{:?}", e);
-                let res = Response::from_string(format!("{:?}", e)).with_status_code(404);
-                request.respond(res).unwrap();
-            }
+    let mut watcher = recommended_watcher(move |res| match res {
+        Ok(Event {
+            kind: EventKind::Modify(_),
+            paths,
+            attrs,
+        }) => {
+            log::info!("{:?} {:?}", attrs, paths);
+            build(&args, &config).unwrap();
         }
+        Ok(Event {
+            kind: EventKind::Create(_),
+            paths,
+            attrs,
+        }) => {
+            log::info!("{:?} {:?}", attrs, paths);
+            build(&args, &config).unwrap();
+        }
+        _ => {}
+    })
+    .unwrap();
+
+    for path in &local_config.watch.paths {
+        watcher
+            .watch(Path::new(path), notify::RecursiveMode::Recursive)
+            .unwrap();
     }
+
+    let _ = Command::new(command)
+        .args(http_server_args)
+        .kill_on_drop(true)
+        .status()
+        .await
+        .unwrap();
 
     Ok(())
 }

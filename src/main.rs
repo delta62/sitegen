@@ -9,7 +9,8 @@ use crate::config::Config;
 use crate::error::Result;
 use clap::Parser;
 
-fn main() -> Result<()> {
+#[tokio::main(flavor = "current_thread")]
+async fn main() -> Result<()> {
     env_logger::init();
 
     let args = Args::parse();
@@ -21,6 +22,6 @@ fn main() -> Result<()> {
     match args.command {
         Command::Build => cmd::build(&args, &config),
         Command::Clean => cmd::clean(&args, &config),
-        Command::Serve => cmd::serve(&args, &config),
+        Command::Serve => cmd::serve(args, config).await,
     }
 }
