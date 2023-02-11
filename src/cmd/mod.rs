@@ -1,5 +1,3 @@
-use std::fs;
-
 use crate::compilers::{CompilerOptions, HandlebarsCompiler, MarkdownCompiler, SassCompiler};
 use crate::config::Config;
 use crate::{
@@ -7,6 +5,7 @@ use crate::{
     error::{Error, Result},
 };
 use notify::{recommended_watcher, Event, EventKind, Watcher};
+use std::fs;
 use std::path::Path;
 use tokio::process::Command;
 
