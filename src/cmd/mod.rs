@@ -48,6 +48,17 @@ pub async fn build(_args: &Args, config: &Config) -> Result<()> {
         .await
 }
 
+fn rebuild<P: AsRef<Path>>(path: P, args: &Args, config: &Config) {
+    log::info!("{:?}", path.as_ref());
+    let rt = tokio::runtime::Builder::new_current_thread()
+        .build()
+        .unwrap();
+
+    rt.block_on(async {
+        build(&args, &config).await.unwrap();
+    });
+}
+
 pub async fn serve(args: Args, config: Config) -> Result<()> {
     clean(&args, &config).await?;
     build(&args, &config).await?;
@@ -60,19 +71,13 @@ pub async fn serve(args: Args, config: Config) -> Result<()> {
         Ok(Event {
             kind: EventKind::Modify(_),
             paths,
-            attrs,
-        }) => {
-            log::info!("{:?} {:?}", attrs, paths);
-            build(&args, &config);
-        }
+            ..
+        }) => rebuild(paths.first().unwrap(), &args, &config),
         Ok(Event {
             kind: EventKind::Create(_),
             paths,
-            attrs,
-        }) => {
-            log::info!("{:?} {:?}", attrs, paths);
-            build(&args, &config);
-        }
+            ..
+        }) => rebuild(paths.first().unwrap(), &args, &config),
         _ => {}
     })
     .unwrap();

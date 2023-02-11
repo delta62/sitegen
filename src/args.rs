@@ -10,7 +10,7 @@ pub enum Command {
     Serve,
 }
 
-#[derive(Debug, Parser)]
+#[derive(Clone, Debug, Parser)]
 #[command(author, version, about, long_about = None)]
 pub struct Args {
     #[arg(value_enum)]
