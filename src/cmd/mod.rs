@@ -10,11 +10,11 @@ use std::path::Path;
 use tokio::process::Command;
 
 pub fn clean(_args: &Args, config: &Config) -> Result<()> {
-    std::fs::remove_dir_all(config.build.out_dir.as_str()).map_err(Error::IoError)
+    std::fs::remove_dir_all(config.build.out_dir.as_str()).map_err(Error::Io)
 }
 
 pub fn build(_args: &Args, config: &Config) -> Result<()> {
-    fs::create_dir_all(config.build.out_dir.as_str()).map_err(Error::IoError)?;
+    fs::create_dir_all(config.build.out_dir.as_str()).map_err(Error::Io)?;
 
     let sass_opts = CompilerOptions {
         input_pattern: config.build.style_pattern.as_str(),
@@ -43,12 +43,7 @@ pub async fn serve(args: Args, config: Config) -> Result<()> {
 
     let local_config = config.clone();
     let command = local_config.http.command.as_str();
-    let http_server_args = local_config
-        .http
-        .args
-        .as_ref()
-        .map(|v| v.as_slice())
-        .unwrap_or_default();
+    let http_server_args = local_config.http.args.as_deref().unwrap_or_default();
 
     let mut watcher = recommended_watcher(move |res| match res {
         Ok(Event {

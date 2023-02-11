@@ -36,7 +36,7 @@ impl MarkdownCompiler {
 
         let options = Options {
             parse: ParseOptions {
-                constructs: constructs.clone(),
+                constructs,
                 ..Default::default()
             },
             ..Default::default()
@@ -51,11 +51,11 @@ impl MarkdownCompiler {
         output_path: P,
         handlebars: &HandlebarsCompiler,
     ) -> Result<()> {
-        let posts = glob(pattern).map_err(Error::PatternError)?;
+        let posts = glob(pattern).map_err(Error::Pattern)?;
 
         for post in posts {
-            let post = post.map_err(Error::GlobError)?;
-            let content = fs::read_to_string(post.as_path()).map_err(Error::IoError)?;
+            let post = post.map_err(Error::Glob)?;
+            let content = fs::read_to_string(post.as_path()).map_err(Error::Io)?;
             let md = markdown::to_html_with_options(content.as_str(), &self.options).unwrap();
             let fm = self.parse_front_matter(content.as_str());
 
@@ -63,7 +63,7 @@ impl MarkdownCompiler {
             path.set_extension("html");
 
             log::info!("{:?} -> {:?}", post, path);
-            fs::create_dir_all(path.parent().unwrap()).map_err(Error::IoError)?;
+            fs::create_dir_all(path.parent().unwrap()).map_err(Error::Io)?;
 
             let file = File::create(&path).unwrap();
             let file = BufWriter::new(file);

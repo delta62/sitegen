@@ -4,11 +4,11 @@ use glob::{GlobError, PatternError};
 
 #[derive(Debug)]
 pub enum Error {
-    CompilerError(Box<dyn std::error::Error>),
-    DeserializeError(toml::de::Error),
-    GlobError(GlobError),
-    IoError(io::Error),
-    PatternError(PatternError),
+    Compiler(Box<dyn std::error::Error>),
+    Deserialize(toml::de::Error),
+    Glob(GlobError),
+    Io(io::Error),
+    Pattern(PatternError),
 }
 
 impl Display for Error {

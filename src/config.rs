@@ -33,7 +33,7 @@ pub struct WatchConfig {
 impl Config {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Config> {
         let path = path.as_ref();
-        let text = fs::read_to_string(path).map_err(Error::IoError)?;
-        toml::from_str(text.as_str()).map_err(Error::DeserializeError)
+        let text = fs::read_to_string(path).map_err(Error::Io)?;
+        toml::from_str(text.as_str()).map_err(Error::Deserialize)
     }
 }
