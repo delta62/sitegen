@@ -60,7 +60,6 @@ impl<'a> HandlebarsCompiler<'a> {
     }
 
     pub async fn add_partials(&mut self, pattern: &str) -> Result<()> {
-        log::info!("add_partials");
         let partials = glob(pattern).map_err(Error::Pattern)?;
 
         for partial in partials {
@@ -68,7 +67,7 @@ impl<'a> HandlebarsCompiler<'a> {
             let name = partial.as_path().file_stem().unwrap().to_str().unwrap();
             let content = fs::read_to_string(&partial).await.map_err(Error::Io)?;
 
-            log::info!("adding partial {}", name);
+            log::debug!("adding partial {}", name);
             self.registry.register_partial(name, content).unwrap();
         }
 
@@ -76,7 +75,6 @@ impl<'a> HandlebarsCompiler<'a> {
     }
 
     pub async fn compile_all<P: AsRef<Path>>(&self, pattern: &str, output_path: P) -> Result<()> {
-        log::info!("compile_all");
         let pages = glob(pattern).map_err(Error::Pattern)?;
 
         for page in pages {
@@ -85,7 +83,7 @@ impl<'a> HandlebarsCompiler<'a> {
             let mut path = output_path.as_ref().join(file_name);
             path.set_extension("html");
 
-            log::info!("render {:?} -> {:?}", page, path);
+            log::debug!("render {:?} -> {:?}", page, path);
 
             let dev_mode = self.build_mode == BuildMode::Development;
             let context = PageContext { dev_mode };
@@ -107,7 +105,6 @@ impl<'a> HandlebarsCompiler<'a> {
         data: S,
         path: P,
     ) -> Result<()> {
-        log::info!("render_to_write");
         let rendered = self.registry.render(template, &data).unwrap();
 
         write(path, rendered.as_str()).await.map_err(Error::Io)

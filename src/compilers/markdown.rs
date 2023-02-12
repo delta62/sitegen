@@ -50,7 +50,6 @@ impl MarkdownCompiler {
         output_path: P,
         handlebars: &'a HandlebarsCompiler<'a>,
     ) -> Result<()> {
-        log::info!("a");
         let posts = glob(pattern).map_err(Error::Pattern)?;
 
         for post in posts {
@@ -87,7 +86,6 @@ impl MarkdownCompiler {
                 .unwrap();
         }
 
-        log::info!("b");
         Ok(())
     }
 

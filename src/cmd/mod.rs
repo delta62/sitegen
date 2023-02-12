@@ -4,11 +4,12 @@ use crate::{
     args::Args,
     error::{Error, Result},
 };
-use futures_util::{stream::SplitSink, SinkExt, StreamExt};
-use notify::{recommended_watcher, Event, EventKind, Watcher};
+use futures_util::{stream::SplitSink, SinkExt, StreamExt, TryStreamExt};
+use notify_debouncer_mini::{new_debouncer, DebounceEventResult};
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
+use std::time::Duration;
 use tokio::fs;
 use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Command;
@@ -61,11 +62,15 @@ pub async fn build(args: &Args, config: &Config) -> Result<()> {
             config.build.out_dir.as_str(),
             &handlebars,
         )
-        .await
+        .await?;
+
+    log::info!("Build complete");
+
+    Ok(())
 }
 
 fn rebuild<P: AsRef<Path>>(rt: &tokio::runtime::Runtime, path: P, args: &Args, config: &Config) {
-    log::info!("{:?} changed", path.as_ref());
+    log::info!("change: {}", path.as_ref().to_str().unwrap());
 
     rt.block_on(async {
         build(args, config).await.unwrap();
@@ -82,13 +87,27 @@ async fn ws_listen(clients: Clients) {
 }
 
 async fn accept_connection(stream: TcpStream, clients: Clients) {
-    let addr = stream.peer_addr().unwrap();
-    log::info!("{} connected", addr);
+    let addr = stream.peer_addr().unwrap().to_string();
+    log::debug!("{} connected", addr);
 
     let ws_stream = tokio_tungstenite::accept_async(stream).await.unwrap();
-    let (writer, _) = ws_stream.split();
-    let mut guard = clients.lock().unwrap();
-    guard.insert(addr.to_string(), writer);
+    let (writer, reader) = ws_stream.split();
+
+    {
+        let mut guard = clients.lock().unwrap();
+        guard.insert(addr.clone(), writer);
+    }
+
+    reader
+        .try_for_each(|_msg| std::future::ready(Ok(())))
+        .await
+        .unwrap_or_default();
+
+    {
+        log::debug!("{} disconnected", addr);
+        let mut guard = clients.lock().unwrap();
+        guard.remove(&addr);
+    }
 }
 
 async fn http_listen(cmd: &str, args: &[String]) {
@@ -102,6 +121,8 @@ async fn http_listen(cmd: &str, args: &[String]) {
 }
 
 pub async fn serve(args: Args, config: Config) -> Result<()> {
+    log::info!("booting up; build_mode = {:?}", args.mode);
+
     clean(&args, &config).await?;
     build(&args, &config).await?;
 
@@ -111,47 +132,45 @@ pub async fn serve(args: Args, config: Config) -> Result<()> {
     let http_server_args = local_config.http.args.as_deref().unwrap_or_default();
 
     let watcher_clients = ws_clients.clone();
-    let mut watcher = recommended_watcher(move |res| match res {
-        Ok(Event {
-            kind: EventKind::Modify(_),
-            paths,
-            ..
-        })
-        | Ok(Event {
-            kind: EventKind::Create(_),
-            paths,
-            ..
-        }) => {
-            let first_path = paths.first().unwrap();
-            let rt = tokio::runtime::Builder::new_current_thread()
-                .build()
-                .unwrap();
+    let mut debouncer = new_debouncer(
+        Duration::from_millis(50),
+        None,
+        move |res: DebounceEventResult| match res {
+            Ok(events) => {
+                let first_path = &events.first().unwrap().path;
+                let rt = tokio::runtime::Builder::new_current_thread()
+                    .build()
+                    .unwrap();
 
-            rebuild(&rt, first_path, &args, &config);
+                rebuild(&rt, first_path, &args, &config);
 
-            let mut clients_guard = watcher_clients.lock().unwrap();
-            clients_guard.values_mut().for_each(|writer| {
-                rt.block_on(async {
-                    writer
-                        .send(Message::Text(String::from("reload")))
-                        .await
-                        .unwrap();
-                })
-            });
-        }
-        _ => {}
-    })
+                let mut clients_guard = watcher_clients.lock().unwrap();
+                clients_guard.values_mut().for_each(|writer| {
+                    rt.block_on(async {
+                        writer
+                            .send(Message::Text(String::from("reload")))
+                            .await
+                            .unwrap();
+                    })
+                });
+            }
+            Err(_) => {}
+        },
+    )
     .unwrap();
 
     for path in &local_config.watch.paths {
-        watcher
+        debouncer
+            .watcher()
             .watch(Path::new(path), notify::RecursiveMode::Recursive)
             .expect("Unable to watch path");
     }
+    log::info!("Watching for changes");
 
     // Start up a websocket server for live reloading
     let ws = ws_listen(ws_clients.clone());
     let http = http_listen(http_server_cmd, http_server_args);
+    log::info!("Webserver running");
 
     tokio::join!(ws, http);
 

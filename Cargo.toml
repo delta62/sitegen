@@ -15,6 +15,7 @@ lazy_static = "1.4.0"
 log = "0.4.17"
 markdown = "1.0.0-alpha.6"
 notify = { version = "5.1.0", default-features = false }
+notify-debouncer-mini = { version = "0.2.1", default-features = false }
 serde = { version = "1.0.152", features = ["derive"] }
 tokio = { version = "1.25.0", features = ["macros", "process", "rt", "fs"] }
 tokio-tungstenite = "0.18.0"
