@@ -19,24 +19,22 @@ type WsWriter = SplitSink<WebSocketStream<TcpStream>, Message>;
 type Clients = Arc<Mutex<HashMap<String, WsWriter>>>;
 
 pub async fn clean(_args: &Args, config: &Config) -> Result<()> {
-    Ok(fs::remove_dir_all(config.build.out_dir.as_str())
+    fs::remove_dir_all(config.build.out_dir.as_str())
         .await
-        .unwrap_or_default())
+        .unwrap_or_default();
+
+    Ok(())
 }
 
 pub async fn build(args: &Args, config: &Config) -> Result<()> {
-    log::info!("build");
     fs::create_dir_all(config.build.out_dir.as_str())
         .await
         .map_err(Error::Io)?;
 
     let meta_path = Path::new(config.build.out_dir.as_str()).join("sitegen_meta.toml");
-    log::info!("meta path {:?}", meta_path);
-    fs::write(meta_path.as_path(), format!("mode={}\n", args.mode))
+    fs::write(meta_path.as_path(), format!("mode = {}\n", args.mode))
         .await
         .map_err(Error::Io)?;
-
-    log::info!("meta written");
 
     let sass_opts = CompilerOptions {
         input_pattern: config.build.style_pattern.as_str(),
@@ -70,7 +68,7 @@ fn rebuild<P: AsRef<Path>>(rt: &tokio::runtime::Runtime, path: P, args: &Args, c
     log::info!("{:?} changed", path.as_ref());
 
     rt.block_on(async {
-        build(&args, &config).await.unwrap();
+        build(args, config).await.unwrap();
     });
 }
 
