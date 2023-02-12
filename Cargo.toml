@@ -11,6 +11,7 @@ futures-util = "0.3.26"
 glob = "0.3.1"
 grass = "0.12.2"
 handlebars = "4.3.6"
+lazy_static = "1.4.0"
 log = "0.4.17"
 markdown = "1.0.0-alpha.6"
 notify = { version = "5.1.0", default-features = false }
@@ -18,3 +19,4 @@ serde = { version = "1.0.152", features = ["derive"] }
 tokio = { version = "1.25.0", features = ["macros", "process", "rt", "fs"] }
 tokio-tungstenite = "0.18.0"
 toml = "0.7.1"
+tungstenite = "0.18.0"
