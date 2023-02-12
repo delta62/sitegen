@@ -19,15 +19,24 @@ type WsWriter = SplitSink<WebSocketStream<TcpStream>, Message>;
 type Clients = Arc<Mutex<HashMap<String, WsWriter>>>;
 
 pub async fn clean(_args: &Args, config: &Config) -> Result<()> {
-    fs::remove_dir_all(config.build.out_dir.as_str())
+    Ok(fs::remove_dir_all(config.build.out_dir.as_str())
         .await
-        .map_err(Error::Io)
+        .unwrap_or_default())
 }
 
-pub async fn build(_args: &Args, config: &Config) -> Result<()> {
+pub async fn build(args: &Args, config: &Config) -> Result<()> {
+    log::info!("build");
     fs::create_dir_all(config.build.out_dir.as_str())
         .await
         .map_err(Error::Io)?;
+
+    let meta_path = Path::new(config.build.out_dir.as_str()).join("sitegen_meta.toml");
+    log::info!("meta path {:?}", meta_path);
+    fs::write(meta_path.as_path(), format!("mode={}\n", args.mode))
+        .await
+        .map_err(Error::Io)?;
+
+    log::info!("meta written");
 
     let sass_opts = CompilerOptions {
         input_pattern: config.build.style_pattern.as_str(),
@@ -36,7 +45,7 @@ pub async fn build(_args: &Args, config: &Config) -> Result<()> {
     let sass_compiler = SassCompiler::new(sass_opts);
     sass_compiler.compile().await?;
 
-    let mut handlebars = HandlebarsCompiler::new();
+    let mut handlebars = HandlebarsCompiler::new(args.mode);
     handlebars
         .add_partials(config.build.partials_pattern.as_str())
         .await?;

@@ -1,6 +1,6 @@
 use crate::compilers::HandlebarsCompiler;
 use crate::error::{Error, Result};
-use chrono::{DateTime, Utc};
+use chrono::{DateTime, Local, Utc};
 use glob::glob;
 use markdown::mdast::{Node, Root, Toml};
 use markdown::{Constructs, Options, ParseOptions};
@@ -10,8 +10,8 @@ use tokio::fs;
 #[derive(serde::Serialize)]
 struct PostData {
     body: String,
-    title: String,
     is_published: bool,
+    title: String,
 }
 
 #[derive(Debug, serde::Deserialize)]
@@ -50,6 +50,7 @@ impl MarkdownCompiler {
         output_path: P,
         handlebars: &'a HandlebarsCompiler<'a>,
     ) -> Result<()> {
+        log::info!("a");
         let posts = glob(pattern).map_err(Error::Pattern)?;
 
         for post in posts {
@@ -59,6 +60,10 @@ impl MarkdownCompiler {
                 .map_err(Error::Io)?;
             let md = markdown::to_html_with_options(content.as_str(), &self.options).unwrap();
             let fm = self.parse_front_matter(content.as_str());
+
+            if !is_published(&fm) {
+                continue;
+            }
 
             let mut path = output_path.as_ref().join(&fm.slug);
             path.set_extension("html");
@@ -73,8 +78,8 @@ impl MarkdownCompiler {
                     fm.template.as_str(),
                     &PostData {
                         body: md,
-                        title: fm.title,
                         is_published: fm.published.is_some(),
+                        title: fm.title,
                     },
                     &path,
                 )
@@ -82,6 +87,7 @@ impl MarkdownCompiler {
                 .unwrap();
         }
 
+        log::info!("b");
         Ok(())
     }
 
@@ -104,5 +110,15 @@ impl MarkdownCompiler {
         } else {
             unreachable!();
         }
+    }
+}
+
+fn is_published(fm: &FrontMatter) -> bool {
+    match fm.published {
+        Some(publish_date) => {
+            let now = Local::now();
+            now >= publish_date
+        }
+        None => false,
     }
 }
