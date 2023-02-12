@@ -4,9 +4,11 @@ use crate::{
     args::Args,
     error::{Error, Result},
 };
+use futures_util::{future, StreamExt, TryStreamExt};
 use notify::{recommended_watcher, Event, EventKind, Watcher};
 use std::path::Path;
 use tokio::fs;
+use tokio::net::{TcpListener, TcpStream};
 use tokio::process::Command;
 
 pub async fn clean(_args: &Args, config: &Config) -> Result<()> {
@@ -49,7 +51,7 @@ pub async fn build(_args: &Args, config: &Config) -> Result<()> {
 }
 
 fn rebuild<P: AsRef<Path>>(path: P, args: &Args, config: &Config) {
-    log::info!("{:?}", path.as_ref());
+    log::info!("{:?} changed", path.as_ref());
     let rt = tokio::runtime::Builder::new_current_thread()
         .build()
         .unwrap();
@@ -59,12 +61,45 @@ fn rebuild<P: AsRef<Path>>(path: P, args: &Args, config: &Config) {
     });
 }
 
+async fn ws_listen() {
+    let addr = "localhost:8081";
+    let listener = TcpListener::bind(addr).await.unwrap();
+
+    while let Ok((stream, _)) = listener.accept().await {
+        tokio::spawn(accept_connection(stream));
+    }
+}
+
+async fn accept_connection(stream: TcpStream) {
+    let addr = stream.peer_addr().unwrap();
+    log::info!("Client {} connected", addr);
+
+    let ws_stream = tokio_tungstenite::accept_async(stream).await.unwrap();
+    log::info!("WS connection: {}", addr);
+
+    let (write, read) = ws_stream.split();
+    read.try_filter(|msg| future::ready(msg.is_text() || msg.is_binary()))
+        .forward(write)
+        .await
+        .unwrap();
+}
+
+async fn http_listen(cmd: &str, args: &[String]) {
+    Command::new(cmd)
+        .args(args)
+        .kill_on_drop(true)
+        .status()
+        .await
+        .map(|_| ())
+        .unwrap()
+}
+
 pub async fn serve(args: Args, config: Config) -> Result<()> {
     clean(&args, &config).await?;
     build(&args, &config).await?;
 
     let local_config = config.clone();
-    let command = local_config.http.command.as_str();
+    let http_server_cmd = local_config.http.command.as_str();
     let http_server_args = local_config.http.args.as_deref().unwrap_or_default();
 
     let mut watcher = recommended_watcher(move |res| match res {
@@ -88,12 +123,11 @@ pub async fn serve(args: Args, config: Config) -> Result<()> {
             .expect("Unable to watch path");
     }
 
-    let _ = Command::new(command)
-        .args(http_server_args)
-        .kill_on_drop(true)
-        .status()
-        .await
-        .unwrap();
+    // Start up a websocket server for live reloading
+    let ws = ws_listen();
+    let http = http_listen(http_server_cmd, http_server_args);
+
+    tokio::join!(ws, http);
 
     Ok(())
 }
