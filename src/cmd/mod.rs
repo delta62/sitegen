@@ -55,7 +55,7 @@ pub async fn build(args: &Args, config: &Config) -> Result<()> {
         )
         .await?;
 
-    let markdown = MarkdownCompiler::new();
+    let markdown = MarkdownCompiler::new(args.mode);
     markdown
         .compile(
             config.build.post_pattern.as_str(),

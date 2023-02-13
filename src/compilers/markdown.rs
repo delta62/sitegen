@@ -1,3 +1,4 @@
+use crate::args::BuildMode;
 use crate::compilers::HandlebarsCompiler;
 use crate::error::{Error, Result};
 use chrono::{DateTime, Local, Utc};
@@ -23,11 +24,12 @@ struct FrontMatter {
 }
 
 pub struct MarkdownCompiler {
+    build_mode: BuildMode,
     options: Options,
 }
 
 impl MarkdownCompiler {
-    pub fn new() -> Self {
+    pub fn new(build_mode: BuildMode) -> Self {
         let constructs = Constructs {
             frontmatter: true,
             ..Default::default()
@@ -41,7 +43,10 @@ impl MarkdownCompiler {
             ..Default::default()
         };
 
-        Self { options }
+        Self {
+            build_mode,
+            options,
+        }
     }
 
     pub async fn compile<'a, P: AsRef<Path>>(
@@ -60,7 +65,7 @@ impl MarkdownCompiler {
             let md = markdown::to_html_with_options(content.as_str(), &self.options).unwrap();
             let fm = self.parse_front_matter(content.as_str());
 
-            if !is_published(&fm) {
+            if self.build_mode == BuildMode::Release && !is_published(&fm) {
                 continue;
             }
 
