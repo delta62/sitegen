@@ -117,11 +117,7 @@ impl MarkdownCompiler {
 }
 
 fn is_published(fm: &FrontMatter) -> bool {
-    match fm.published {
-        Some(publish_date) => {
-            let now = Local::now();
-            now >= publish_date
-        }
-        None => false,
-    }
+    fm.published
+        .map(|publish_date| Local::now() > publish_date)
+        .unwrap_or_default()
 }
