@@ -11,6 +11,7 @@ use tokio::fs;
 #[derive(serde::Serialize)]
 struct PostData {
     body: String,
+    description: String,
     is_published: bool,
     title: String,
 }
@@ -20,6 +21,7 @@ struct FrontMatter {
     slug: String,
     title: String,
     template: String,
+    description: String,
     published: Option<DateTime<Utc>>,
 }
 
@@ -32,6 +34,8 @@ impl MarkdownCompiler {
     pub fn new(build_mode: BuildMode) -> Self {
         let constructs = Constructs {
             frontmatter: true,
+            gfm_footnote_definition: true,
+            gfm_label_start_footnote: true,
             ..Default::default()
         };
 
@@ -40,7 +44,7 @@ impl MarkdownCompiler {
                 constructs,
                 ..Default::default()
             },
-            ..Default::default()
+            ..Options::gfm()
         };
 
         Self {
@@ -82,6 +86,7 @@ impl MarkdownCompiler {
                     fm.template.as_str(),
                     &PostData {
                         body: md,
+                        description: fm.description,
                         is_published: fm.published.is_some(),
                         title: fm.title,
                     },

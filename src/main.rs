@@ -6,11 +6,10 @@ mod error;
 
 use crate::args::{Args, Command};
 use crate::config::Config;
-use crate::error::Result;
 use clap::Parser;
 
 #[tokio::main(flavor = "current_thread")]
-async fn main() -> Result<()> {
+async fn main() {
     env_logger::init();
 
     let args = Args::parse();
@@ -19,9 +18,13 @@ async fn main() -> Result<()> {
     let config = Config::load("config.toml").expect("Unable to read config file");
     log::debug!("{:?}", config);
 
-    match args.command {
+    let result = match args.command {
         Command::Build => cmd::build(&args, &config).await,
         Command::Clean => cmd::clean(&args, &config).await,
         Command::Serve => cmd::serve(args, config).await,
+    };
+
+    if let Err(error) = result {
+        log::error!("{}", error);
     }
 }

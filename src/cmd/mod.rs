@@ -1,4 +1,6 @@
-use crate::compilers::{CompilerOptions, HandlebarsCompiler, MarkdownCompiler, SassCompiler};
+use crate::compilers::{
+    CompilerOptions, FileCopier, HandlebarsCompiler, MarkdownCompiler, SassCompiler,
+};
 use crate::config::Config;
 use crate::{
     args::Args,
@@ -64,17 +66,23 @@ pub async fn build(args: &Args, config: &Config) -> Result<()> {
         )
         .await?;
 
+    let file_copy = FileCopier::new(config.build.copy.as_ref(), config.build.out_dir.as_str());
+    file_copy.copy().await?;
+
     log::info!("Build complete");
 
     Ok(())
 }
 
-fn rebuild<P: AsRef<Path>>(rt: &tokio::runtime::Runtime, path: P, args: &Args, config: &Config) {
+fn rebuild<P: AsRef<Path>>(
+    rt: &tokio::runtime::Runtime,
+    path: P,
+    args: &Args,
+    config: &Config,
+) -> Result<()> {
     log::info!("change: {}", path.as_ref().to_str().unwrap());
 
-    rt.block_on(async {
-        build(args, config).await.unwrap();
-    });
+    rt.block_on(async { build(args, config).await })
 }
 
 async fn ws_listen(clients: Clients) {
@@ -142,7 +150,11 @@ pub async fn serve(args: Args, config: Config) -> Result<()> {
                     .build()
                     .unwrap();
 
-                rebuild(&rt, first_path, &args, &config);
+                let build_result = rebuild(&rt, first_path, &args, &config);
+                if let Err(error) = build_result {
+                    log::error!("{}", error);
+                    return;
+                }
 
                 let mut clients_guard = watcher_clients.lock().unwrap();
                 clients_guard.values_mut().for_each(|writer| {

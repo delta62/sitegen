@@ -17,6 +17,7 @@ pub struct BuildConfig {
     pub partials_pattern: String,
     pub post_pattern: String,
     pub style_pattern: String,
+    pub copy: Option<Vec<String>>,
 }
 
 #[derive(Clone, Debug, Deserialize)]
@@ -34,6 +35,6 @@ impl Config {
     pub fn load<P: AsRef<Path>>(path: P) -> Result<Config> {
         let path = path.as_ref();
         let text = fs::read_to_string(path).map_err(Error::Io)?;
-        toml::from_str(text.as_str()).map_err(Error::Deserialize)
+        toml::from_str(text.as_str()).map_err(Error::Toml)
     }
 }

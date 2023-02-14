@@ -28,7 +28,7 @@ impl<'a> SassCompiler<'a> {
         for stylesheet in stylesheets {
             let stylesheet = stylesheet.map_err(Error::Glob)?;
             let rendered = grass::from_path(stylesheet.as_path(), &self.compiler_options)
-                .map_err(|e| Error::Compiler(Box::new(e)))?;
+                .map_err(Error::Sass)?;
 
             let file_name = stylesheet.file_name().unwrap();
             let mut path = Path::new(self.options.output_path).join(file_name);
