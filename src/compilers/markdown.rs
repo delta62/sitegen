@@ -27,6 +27,7 @@ struct FrontMatter {
 
 pub struct MarkdownCompiler {
     build_mode: BuildMode,
+    fm_parse_options: ParseOptions,
     options: Options,
 }
 
@@ -47,8 +48,14 @@ impl MarkdownCompiler {
             ..Options::gfm()
         };
 
+        let fm_parse_options = ParseOptions {
+            constructs: options.parse.constructs.clone(),
+            ..Default::default()
+        };
+
         Self {
             build_mode,
+            fm_parse_options,
             options,
         }
     }
@@ -60,60 +67,61 @@ impl MarkdownCompiler {
         handlebars: &'a HandlebarsCompiler<'a>,
     ) -> Result<()> {
         let posts = glob(pattern).map_err(Error::Pattern)?;
+        let output_path = output_path.as_ref();
 
         for post in posts {
             let post = post.map_err(Error::Glob)?;
-            let content = fs::read_to_string(post.as_path())
-                .await
-                .map_err(Error::Io)?;
-            let md = markdown::to_html_with_options(content.as_str(), &self.options).unwrap();
-            let fm = self.parse_front_matter(content.as_str());
-
-            if self.build_mode == BuildMode::Release && !is_published(&fm) {
-                continue;
-            }
-
-            let mut path = output_path.as_ref().join(&fm.slug);
-            path.set_extension("html");
-
-            log::info!("{:?} -> {:?}", post, path);
-            fs::create_dir_all(path.parent().unwrap())
-                .await
-                .map_err(Error::Io)?;
-
-            handlebars
-                .render_to_write(
-                    fm.template.as_str(),
-                    &PostData {
-                        body: md,
-                        description: fm.description,
-                        is_published: fm.published.is_some(),
-                        title: fm.title,
-                    },
-                    &path,
-                )
-                .await
-                .unwrap();
+            self.render_post(&post.as_path(), handlebars, output_path)
+                .await?;
         }
 
         Ok(())
     }
 
-    fn parse_front_matter(&self, content: &str) -> FrontMatter {
-        let ast = markdown::to_mdast(
-            content,
-            &ParseOptions {
-                constructs: self.options.parse.constructs.clone(),
-                ..Default::default()
-            },
-        )
-        .unwrap();
+    async fn render_post(
+        &self,
+        post: &Path,
+        handlebars: &HandlebarsCompiler<'_>,
+        output_path: &Path,
+    ) -> Result<()> {
+        let content = fs::read_to_string(post).await.map_err(Error::Io)?;
+        let md = markdown::to_html_with_options(content.as_str(), &self.options)
+            .map_err(Error::MarkdownError)?;
+        let fm = self.parse_front_matter(content.as_str())?;
+
+        if self.build_mode.is_release() && !is_published(&fm) {
+            return Ok(());
+        }
+
+        let mut path = output_path.join(&fm.slug);
+        path.set_extension("html");
+
+        log::debug!("{:?} -> {:?}", post, path);
+        fs::create_dir_all(path.parent().unwrap())
+            .await
+            .map_err(Error::Io)?;
+
+        let post_data = PostData {
+            body: md,
+            description: fm.description,
+            is_published: fm.published.is_some(),
+            title: fm.title,
+        };
+
+        handlebars
+            .render_to_write(fm.template.as_str(), &post_data, &path)
+            .await
+    }
+
+    fn parse_front_matter(&self, content: &str) -> Result<FrontMatter> {
+        let ast =
+            markdown::to_mdast(content, &self.fm_parse_options).map_err(Error::MarkdownError)?;
 
         if let Node::Root(Root { children, .. }) = ast {
             if let Some(Node::Toml(Toml { value, .. })) = children.first() {
-                toml::from_str(value).unwrap()
+                toml::from_str(value).map_err(Error::Toml)
             } else {
-                panic!("No front matter");
+                Err(Error::MissingFrontMatter)
             }
         } else {
             unreachable!();

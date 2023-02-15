@@ -20,6 +20,12 @@ pub enum BuildMode {
     Release,
 }
 
+impl BuildMode {
+    pub fn is_release(&self) -> bool {
+        BuildMode::Release == *self
+    }
+}
+
 impl Display for BuildMode {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let s = match self {

@@ -7,6 +7,8 @@ pub enum Error {
     Toml(toml::de::Error),
     Glob(GlobError),
     Io(io::Error),
+    MarkdownError(String),
+    MissingFrontMatter,
     Pattern(PatternError),
     Sass(Box<grass::Error>),
 }
@@ -16,6 +18,8 @@ impl Display for Error {
         match self {
             Self::Glob(error) => write!(f, "{}", error),
             Self::Io(error) => write!(f, "{}", error),
+            Self::MarkdownError(error) => write!(f, "{}", error),
+            Self::MissingFrontMatter => write!(f, "missing front matter"),
             Self::Pattern(error) => write!(f, "{}", error),
             Self::Sass(error) => write!(f, "{}", error),
             Self::Toml(error) => write!(f, "{}", error),
