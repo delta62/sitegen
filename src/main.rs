@@ -20,7 +20,7 @@ async fn main() {
 
     let result = match args.command {
         Command::Build => cmd::build(&args, &config).await,
-        Command::Clean => cmd::clean(&args, &config).await,
+        Command::Clean => Ok(cmd::clean(&args, &config).await),
         Command::Serve => cmd::serve(args, config).await,
     };
 

@@ -1,137 +1,28 @@
-use crate::compilers::{
-    CompilerOptions, FileCopier, HandlebarsCompiler, MarkdownCompiler, SassCompiler,
-};
+mod build;
+mod clean;
+mod http;
+mod rebuild;
+mod websocket;
+
 use crate::config::Config;
-use crate::{
-    args::Args,
-    error::{Error, Result},
-};
-use futures_util::{stream::SplitSink, SinkExt, StreamExt, TryStreamExt};
+use crate::{args::Args, error::Result};
+pub use build::build;
+pub use clean::clean;
+use futures_util::SinkExt;
+use http::http_listen;
 use notify_debouncer_mini::{new_debouncer, DebounceEventResult};
+pub use rebuild::rebuild;
 use std::collections::HashMap;
 use std::path::Path;
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use tokio::fs;
-use tokio::net::{TcpListener, TcpStream};
-use tokio::process::Command;
-use tokio_tungstenite::WebSocketStream;
 use tungstenite::Message;
-
-type WsWriter = SplitSink<WebSocketStream<TcpStream>, Message>;
-type Clients = Arc<Mutex<HashMap<String, WsWriter>>>;
-
-pub async fn clean(_args: &Args, config: &Config) -> Result<()> {
-    fs::remove_dir_all(config.build.out_dir.as_str())
-        .await
-        .unwrap_or_default();
-
-    Ok(())
-}
-
-pub async fn build(args: &Args, config: &Config) -> Result<()> {
-    fs::create_dir_all(config.build.out_dir.as_str())
-        .await
-        .map_err(Error::Io)?;
-
-    let meta_path = Path::new(config.build.out_dir.as_str()).join("sitegen_meta.toml");
-    fs::write(meta_path.as_path(), format!("mode = {}\n", args.mode))
-        .await
-        .map_err(Error::Io)?;
-
-    let sass_opts = CompilerOptions {
-        input_pattern: config.build.style_pattern.as_str(),
-        output_path: config.build.out_dir.as_str(),
-    };
-    let sass_compiler = SassCompiler::new(sass_opts);
-    sass_compiler.compile().await?;
-
-    let mut handlebars = HandlebarsCompiler::new(args.mode);
-    handlebars
-        .add_partials(config.build.partials_pattern.as_str())
-        .await?;
-    handlebars
-        .compile_all(
-            config.build.page_pattern.as_str(),
-            config.build.out_dir.as_str(),
-        )
-        .await?;
-
-    let markdown = MarkdownCompiler::new(args.mode);
-    markdown
-        .compile(
-            config.build.post_pattern.as_str(),
-            config.build.out_dir.as_str(),
-            &handlebars,
-        )
-        .await?;
-
-    let file_copy = FileCopier::new(config.build.copy.as_ref(), config.build.out_dir.as_str());
-    file_copy.copy().await?;
-
-    log::info!("Build complete");
-
-    Ok(())
-}
-
-fn rebuild<P: AsRef<Path>>(
-    rt: &tokio::runtime::Runtime,
-    path: P,
-    args: &Args,
-    config: &Config,
-) -> Result<()> {
-    log::info!("change: {}", path.as_ref().to_str().unwrap());
-
-    rt.block_on(async { build(args, config).await })
-}
-
-async fn ws_listen(clients: Clients) {
-    let addr = "localhost:8081";
-    let listener = TcpListener::bind(addr).await.unwrap();
-
-    while let Ok((stream, _)) = listener.accept().await {
-        tokio::spawn(accept_connection(stream, clients.clone()));
-    }
-}
-
-async fn accept_connection(stream: TcpStream, clients: Clients) {
-    let addr = stream.peer_addr().unwrap().to_string();
-    log::debug!("{} connected", addr);
-
-    let ws_stream = tokio_tungstenite::accept_async(stream).await.unwrap();
-    let (writer, reader) = ws_stream.split();
-
-    {
-        let mut guard = clients.lock().unwrap();
-        guard.insert(addr.clone(), writer);
-    }
-
-    reader
-        .try_for_each(|_msg| std::future::ready(Ok(())))
-        .await
-        .unwrap_or_default();
-
-    {
-        log::debug!("{} disconnected", addr);
-        let mut guard = clients.lock().unwrap();
-        guard.remove(&addr);
-    }
-}
-
-async fn http_listen(cmd: &str, args: &[String]) {
-    Command::new(cmd)
-        .args(args)
-        .kill_on_drop(true)
-        .status()
-        .await
-        .map(|_| ())
-        .unwrap()
-}
+use websocket::{ws_listen, Clients};
 
 pub async fn serve(args: Args, config: Config) -> Result<()> {
     log::info!("booting up; build_mode = {:?}", args.mode);
 
-    clean(&args, &config).await?;
+    clean(&args, &config).await;
     build(&args, &config).await?;
 
     let ws_clients: Clients = Arc::new(Mutex::new(HashMap::new()));
