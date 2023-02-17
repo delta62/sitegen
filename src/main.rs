@@ -3,6 +3,7 @@ mod cmd;
 mod compilers;
 mod config;
 mod error;
+mod post_cache;
 
 use crate::args::{Args, Command};
 use crate::config::Config;

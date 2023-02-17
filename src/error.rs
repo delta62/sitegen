@@ -1,11 +1,13 @@
 use std::{fmt::Display, io};
 
 use glob::{GlobError, PatternError};
+use handlebars::RenderError;
 
 #[derive(Debug)]
 pub enum Error {
     Toml(toml::de::Error),
     Glob(GlobError),
+    HandlebarsError(RenderError),
     Io(io::Error),
     MarkdownError(String),
     MissingFrontMatter,
@@ -17,6 +19,7 @@ impl Display for Error {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         match self {
             Self::Glob(error) => write!(f, "{}", error),
+            Self::HandlebarsError(error) => write!(f, "{}", error),
             Self::Io(error) => write!(f, "{}", error),
             Self::MarkdownError(error) => write!(f, "{}", error),
             Self::MissingFrontMatter => write!(f, "missing front matter"),

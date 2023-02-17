@@ -1,20 +1,13 @@
 use crate::args::BuildMode;
 use crate::compilers::HandlebarsCompiler;
 use crate::error::{Error, Result};
+use crate::post_cache::{PostCache, PostData, PostRef};
 use chrono::{DateTime, Local, Utc};
 use glob::glob;
 use markdown::mdast::{Node, Root, Toml};
 use markdown::{Constructs, Options, ParseOptions};
 use std::path::Path;
 use tokio::fs;
-
-#[derive(serde::Serialize)]
-struct PostData {
-    body: String,
-    description: String,
-    is_published: bool,
-    title: String,
-}
 
 #[derive(Debug, serde::Deserialize)]
 struct FrontMatter {
@@ -65,17 +58,21 @@ impl MarkdownCompiler {
         pattern: &str,
         output_path: P,
         handlebars: &'a HandlebarsCompiler<'a>,
-    ) -> Result<()> {
+    ) -> Result<PostCache> {
+        let mut post_cache = PostCache::new();
         let posts = glob(pattern).map_err(Error::Pattern)?;
         let output_path = output_path.as_ref();
 
         for post in posts {
             let post = post.map_err(Error::Glob)?;
-            self.render_post(&post.as_path(), handlebars, output_path)
+            let post = self
+                .render_post(&post.as_path(), handlebars, output_path)
                 .await?;
+
+            post.map(|p| post_cache.add_ref(p));
         }
 
-        Ok(())
+        Ok(post_cache)
     }
 
     async fn render_post(
@@ -83,14 +80,14 @@ impl MarkdownCompiler {
         post: &Path,
         handlebars: &HandlebarsCompiler<'_>,
         output_path: &Path,
-    ) -> Result<()> {
+    ) -> Result<Option<PostRef>> {
         let content = fs::read_to_string(post).await.map_err(Error::Io)?;
         let md = markdown::to_html_with_options(content.as_str(), &self.options)
             .map_err(Error::MarkdownError)?;
         let fm = self.parse_front_matter(content.as_str())?;
 
         if self.build_mode.is_release() && !is_published(&fm) {
-            return Ok(());
+            return Ok(None);
         }
 
         let mut path = output_path.join(&fm.slug);
@@ -103,14 +100,17 @@ impl MarkdownCompiler {
 
         let post_data = PostData {
             body: md,
-            description: fm.description,
-            is_published: fm.published.is_some(),
+            intro: fm.description,
+            publish_date: fm.published,
+            slug: fm.slug,
             title: fm.title,
         };
 
         handlebars
             .render_to_write(fm.template.as_str(), &post_data, &path)
-            .await
+            .await?;
+
+        Ok(Some(post_data.into()))
     }
 
     fn parse_front_matter(&self, content: &str) -> Result<FrontMatter> {

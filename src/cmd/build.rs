@@ -28,19 +28,21 @@ pub async fn build(args: &Args, config: &Config) -> Result<()> {
     handlebars
         .add_partials(config.build.partials_pattern.as_str())
         .await?;
-    handlebars
-        .compile_all(
-            config.build.page_pattern.as_str(),
-            config.build.out_dir.as_str(),
-        )
-        .await?;
 
     let markdown = MarkdownCompiler::new(args.mode);
-    markdown
+    let post_cache = markdown
         .compile(
             config.build.post_pattern.as_str(),
             config.build.out_dir.as_str(),
             &handlebars,
+        )
+        .await?;
+
+    handlebars
+        .compile_all(
+            config.build.page_pattern.as_str(),
+            config.build.out_dir.as_str(),
+            &post_cache,
         )
         .await?;
 

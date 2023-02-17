@@ -1,6 +1,7 @@
 use crate::{
     args::BuildMode,
     error::{Error, Result},
+    post_cache::{PostCache, PostRef},
 };
 use glob::glob;
 use handlebars::{
@@ -74,7 +75,12 @@ impl<'a> HandlebarsCompiler<'a> {
         Ok(())
     }
 
-    pub async fn compile_all<P: AsRef<Path>>(&self, pattern: &str, output_path: P) -> Result<()> {
+    pub async fn compile_all<P: AsRef<Path>>(
+        &self,
+        pattern: &str,
+        output_path: P,
+        post_cache: &PostCache,
+    ) -> Result<()> {
         let pages = glob(pattern).map_err(Error::Pattern)?;
 
         for page in pages {
@@ -86,12 +92,13 @@ impl<'a> HandlebarsCompiler<'a> {
             log::debug!("render {:?} -> {:?}", page, path);
 
             let dev_mode = self.build_mode == BuildMode::Development;
-            let context = PageContext { dev_mode };
+            let posts = post_cache.posts();
+            let context = PageContext { dev_mode, posts };
             let contents = fs::read_to_string(page).await.map_err(Error::Io)?;
             let rendered = self
                 .registry
                 .render_template(contents.as_str(), &context)
-                .unwrap();
+                .map_err(Error::HandlebarsError)?;
 
             write(&path, rendered.as_str()).await.map_err(Error::Io)?;
         }
@@ -105,13 +112,17 @@ impl<'a> HandlebarsCompiler<'a> {
         data: S,
         path: P,
     ) -> Result<()> {
-        let rendered = self.registry.render(template, &data).unwrap();
+        let rendered = self
+            .registry
+            .render(template, &data)
+            .map_err(Error::HandlebarsError)?;
 
         write(path, rendered.as_str()).await.map_err(Error::Io)
     }
 }
 
 #[derive(Serialize)]
-struct PageContext {
+struct PageContext<'a> {
     dev_mode: bool,
+    posts: &'a [PostRef],
 }
