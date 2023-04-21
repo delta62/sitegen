@@ -1,15 +1,17 @@
 use crate::{
     args::BuildMode,
     error::{Error, Result},
-    post_cache::{PostCache, PostRef},
+    post_cache::PostCache,
 };
 use glob::glob;
 use handlebars::{
     Context, Handlebars, Helper, HelperDef, HelperResult, Output, RenderContext, Renderable,
 };
 use serde::Serialize;
-use std::path::Path;
+use std::{fs::read_to_string, path::Path};
 use tokio::fs::{self, write};
+
+use super::FrontMatter;
 
 struct DevOnly;
 
@@ -41,6 +43,26 @@ impl HelperDef for DevOnly {
     }
 }
 
+struct InlineSvg;
+
+impl HelperDef for InlineSvg {
+    fn call<'reg: 'rc, 'rc>(
+        &self,
+        h: &Helper<'reg, 'rc>,
+        _r: &'reg Handlebars<'reg>,
+        _ctx: &'rc Context,
+        _rc: &mut RenderContext<'reg, 'rc>,
+        out: &mut dyn Output,
+    ) -> HelperResult {
+        let path = h.param(0).and_then(|v| v.value().as_str()).unwrap();
+        let svg = read_to_string(path)?;
+
+        out.write(&svg)?;
+
+        Ok(())
+    }
+}
+
 pub struct HandlebarsCompiler<'a> {
     build_mode: BuildMode,
     registry: Handlebars<'a>,
@@ -53,6 +75,7 @@ impl<'a> HandlebarsCompiler<'a> {
         registry.set_dev_mode(build_mode == BuildMode::Development);
 
         registry.register_helper("ifdev", Box::new(DevOnly));
+        registry.register_helper("svg", Box::new(InlineSvg));
 
         Self {
             build_mode,
@@ -124,5 +147,5 @@ impl<'a> HandlebarsCompiler<'a> {
 #[derive(Serialize)]
 struct PageContext<'a> {
     dev_mode: bool,
-    posts: &'a [PostRef],
+    posts: &'a [FrontMatter],
 }

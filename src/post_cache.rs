@@ -1,36 +1,7 @@
-use chrono::{DateTime, Utc};
-use serde::Serialize;
-
-#[derive(Serialize)]
-pub struct PostRef {
-    title: String,
-    publish_date: Option<DateTime<Utc>>,
-    href: String,
-    intro: String,
-}
-
-#[derive(serde::Serialize)]
-pub struct PostData {
-    pub body: String,
-    pub intro: String,
-    pub publish_date: Option<DateTime<Utc>>,
-    pub slug: String,
-    pub title: String,
-}
-
-impl From<PostData> for PostRef {
-    fn from(value: PostData) -> Self {
-        Self {
-            title: value.title.clone(),
-            publish_date: value.publish_date,
-            intro: value.intro.clone(),
-            href: format!("{}.html", value.slug),
-        }
-    }
-}
+use crate::compilers::FrontMatter;
 
 pub struct PostCache {
-    posts: Vec<PostRef>,
+    posts: Vec<FrontMatter>,
 }
 
 impl PostCache {
@@ -39,11 +10,11 @@ impl PostCache {
         Self { posts }
     }
 
-    pub fn add_ref(&mut self, post: PostRef) {
+    pub fn add_ref(&mut self, post: FrontMatter) {
         self.posts.push(post);
     }
 
-    pub fn posts(&self) -> &[PostRef] {
+    pub fn posts(&self) -> &[FrontMatter] {
         self.posts.as_slice()
     }
 }

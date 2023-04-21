@@ -1,22 +1,15 @@
 use crate::args::BuildMode;
 use crate::compilers::HandlebarsCompiler;
 use crate::error::{Error, Result};
-use crate::post_cache::{PostCache, PostData, PostRef};
-use chrono::{DateTime, Local, Utc};
+use crate::post_cache::PostCache;
+use chrono::{Local, TimeZone};
 use glob::glob;
 use markdown::mdast::{Node, Root, Toml};
 use markdown::{Constructs, Options, ParseOptions};
 use std::path::Path;
 use tokio::fs;
 
-#[derive(Debug, serde::Deserialize)]
-struct FrontMatter {
-    slug: String,
-    title: String,
-    template: String,
-    description: String,
-    published: Option<DateTime<Utc>>,
-}
+pub type FrontMatter = toml::Table;
 
 pub struct MarkdownCompiler {
     build_mode: BuildMode,
@@ -80,7 +73,7 @@ impl MarkdownCompiler {
         post: &Path,
         handlebars: &HandlebarsCompiler<'_>,
         output_path: &Path,
-    ) -> Result<Option<PostRef>> {
+    ) -> Result<Option<FrontMatter>> {
         let content = fs::read_to_string(post).await.map_err(Error::Io)?;
         let md = markdown::to_html_with_options(content.as_str(), &self.options)
             .map_err(Error::MarkdownError)?;
@@ -90,7 +83,9 @@ impl MarkdownCompiler {
             return Ok(None);
         }
 
-        let mut path = output_path.join(&fm.slug);
+        let template = fm.get("template").and_then(|tpl| tpl.as_str()).unwrap();
+        let slug = slug(&fm).unwrap();
+        let mut path = output_path.join(slug);
         path.set_extension("html");
 
         log::debug!("{:?} -> {:?}", post, path);
@@ -98,19 +93,9 @@ impl MarkdownCompiler {
             .await
             .map_err(Error::Io)?;
 
-        let post_data = PostData {
-            body: md,
-            intro: fm.description,
-            publish_date: fm.published,
-            slug: fm.slug,
-            title: fm.title,
-        };
+        handlebars.render_to_write(template, &fm, &path).await?;
 
-        handlebars
-            .render_to_write(fm.template.as_str(), &post_data, &path)
-            .await?;
-
-        Ok(Some(post_data.into()))
+        Ok(Some(fm))
     }
 
     fn parse_front_matter(&self, content: &str) -> Result<FrontMatter> {
@@ -129,8 +114,35 @@ impl MarkdownCompiler {
     }
 }
 
+fn slug(fm: &FrontMatter) -> Option<&str> {
+    fm.get("slug").and_then(|slug| slug.as_str())
+}
+
 fn is_published(fm: &FrontMatter) -> bool {
-    fm.published
-        .map(|publish_date| Local::now() > publish_date)
+    fm.get("published")
+        .and_then(|published| published.as_datetime())
+        .map(|publish_date| {
+            let y: i32;
+            let m: u32;
+            let d: u32;
+
+            match publish_date.date {
+                Some(date) => {
+                    y = date.year as i32;
+                    m = date.month as u32;
+                    d = date.day as u32;
+                }
+                None => {
+                    y = 3000;
+                    m = 1;
+                    d = 1;
+                }
+            }
+
+            let now = Local::now();
+            let pub_date = Local.with_ymd_and_hms(y, m, d, 0, 0, 0).unwrap();
+
+            pub_date < now
+        })
         .unwrap_or_default()
 }
